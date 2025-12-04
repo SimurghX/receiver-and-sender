@@ -7,7 +7,7 @@ import sys
 # GStreamer sürümünü belirtin
 try:
     gi.require_version('Gst', '1.0')
-    from gi.repository import Gst, GObject
+    from gi.repository import Gst, GLib
 except ValueError as e:
     print(f"Hata: GStreamer yüklenemedi. Gerekli kütüphanelerin kurulu olduğundan emin olun. Hata: {e}")
     sys.exit(1)
@@ -26,7 +26,7 @@ def on_error(bus, msg):
     global pipeline
     if pipeline:
         pipeline.set_state(Gst.State.NULL)
-    GObject.MainLoop().quit()
+    GLib.MainLoop().quit()
 
 def on_eos(bus, msg):
     """Akış Sonu (End of Stream) sinyalini işler."""
@@ -35,7 +35,7 @@ def on_eos(bus, msg):
     global pipeline
     if pipeline:
         pipeline.set_state(Gst.State.NULL)
-    GObject.MainLoop().quit()
+    GLib.MainLoop().quit()
 
 def run_gcs_receiver():
     """GCS alıcısını başlatır ve GStreamer pipeline'ı oluşturur."""
@@ -87,4 +87,14 @@ def run_gcs_receiver():
 
     # 6. Ana döngüyü başlat
     # Bu, GStreamer'ın olayları (frameler, hatalar vb.) işlemesini sağlar.
-    loop = GObject.MainLoop()
+    loop = GLib.MainLoop()
+    try:
+        loop.run()  # <-- Bu satır eksikti, programı hayatta tutan budur.
+    except KeyboardInterrupt:
+        print("\nKullanıcı tarafından durduruldu.")
+        on_eos(None, None) # Temiz kapanış
+    except Exception as e:
+        print(f"Döngü hatası: {e}")
+
+if __name__ == "__main__":
+    run_gcs_receiver()

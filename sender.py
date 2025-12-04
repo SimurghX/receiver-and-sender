@@ -7,9 +7,9 @@ import os
 
 try:
     gi.require_version('Gst', '1.0')
-    from gi.repository import Gst, GObject
+    from gi.repository import Gst, GLib
 except ValueError as e:
-    print(f"Hata: GStreamer yüklenemedi veya PyGObject bulunamadı. Hata: {e}")
+    print(f"Hata: GStreamer yüklenemedi veya PyGLib bulunamadı. Hata: {e}")
     sys.exit(1)
 
 # Sabitler
@@ -95,7 +95,7 @@ def run_camera_sender():
     pipeline.set_state(Gst.State.PLAYING)
 
     # Ana döngü
-    loop = GObject.MainLoop()
+    loop = GLib.MainLoop()
     try:
         loop.run()
     except KeyboardInterrupt:

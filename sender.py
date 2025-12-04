@@ -1,111 +1,85 @@
-#!/usr/bin/env python
-
 import gi
 import sys
-import argparse
-import os
 
 try:
     gi.require_version('Gst', '1.0')
     from gi.repository import Gst, GLib
 except ValueError as e:
-    print(f"Hata: GStreamer yüklenemedi veya PyGLib bulunamadı. Hata: {e}")
+    print("ERROR: GStreamer dependencies missing.")
+    print(f"ERROR_MSG: {e}")
     sys.exit(1)
 
-# Sabitler
+
 UDP_PORT = 5600
-# Kendi bilgisayarınızda bir alıcı çalıştırıyorsanız '127.0.0.1' (localhost) doğru.
-# Başka bir cihaza gönderecekseniz o cihazın IP'sini girin.
-HOST_IP = "127.0.0.1" 
+# If this device 127.0.0.1
+# If another device change to that devices IP
+HOST_IP = "127.0.0.1"
 
-# Global değişkenler (Önceki kodunuzla uyumlu kalmak için)
-pipeline = None
-loop = None
-
-# --- Hata ve EOS İşleyicileri (Değişmedi) ---
-
-def on_error(bus, msg):
-    """Hata mesajlarını işler ve uygulamayı sonlandırır."""
+# Error process
+def on_error(msg):
     err, debug_info = msg.parse_error()
-    print(f"Hata Kaynağı: {msg.src.get_name()}")
-    print(f"Hata: {err.message}")
-    print(f"Hata Ayıklama Bilgisi: {debug_info}")
+    print(f"ERROR: {err.message}")
+    print(f"DEBUG_INFO: {debug_info}")
     global pipeline, loop
-    if pipeline:
-        pipeline.set_state(Gst.State.NULL)
     if loop:
         loop.quit()
 
-def on_eos(bus, msg):
-    """Akış Sonu (End of Stream) sinyalini işler."""
-    print("Akış Sonu (End of Stream) ulaşıldı.")
+# End of stream process
+def on_eos():
+    print("INFO: Reach EOS (End of Stream).")
     global pipeline, loop
-    if pipeline:
-        pipeline.set_state(Gst.State.NULL)
     if loop:
         loop.quit()
 
-# ----------------------------------------------------------------
-
+# Get live feed from camera
+# Encode with H.264 send with UDP
 def run_camera_sender():
-    """
-    Kameradan canlı video akışını alır, H.264 olarak kodlar ve UDP üzerinden gönderir.
-    """
     global pipeline, loop
     Gst.init(None)
 
-    print("Kamera akışı hazırlanıyor.")
-    print(f"Akış adresi: {HOST_IP}:{UDP_PORT}")
+    print("INFO: Camera feed getting ready.")
+    print(f"Feed address: {HOST_IP}:{UDP_PORT}")
     
-    # Pipeline Yapısı:
-    # autovideosrc: Sistemdeki varsayılan kamerayı otomatik olarak bulur ve açar.
-    # videoconvert: RAW video formatını kodlayıcı için hazırlar.
-    # x264enc: H.264 formatına kodlar (zerolatency=düşük gecikme için kritik).
-    # rtph264pay: H.264 verisini RTP paketlerine dönüştürür.
-    # udpsink: RTP paketlerini alıcının adresine ve portuna gönderir.
-
-    # NOT: Linux'ta V4L2 destekli kameralar için 'v4l2src' daha kesin sonuç verebilir.
-    # Eğer bu betik çalışmazsa 'autovideosrc' yerine 'v4l2src ! video/x-raw, framerate=30/1 ! ' deneyin.
-    # Yeni pipeline_str denemesi (Windows için dshowvideosrc)
-
+    # Pipeline Structure
     pipeline_str = (
-        f"ksvideosrc ! "         # <-- dshowvideosrc yerine ksvideosrc
+        f"autovideosrc ! "
         f"videoconvert ! "
-        f"x264enc tune=zerolatency bitrate=1000 ! "
+        f"x264enc tune=zerolatency bitrate=1000 speed-preset=ultrafast ! "
         f"rtph264pay config-interval=1 pt=96 ! "
         f"udpsink host={HOST_IP} port={UDP_PORT}"
     )   
 
     print(f"\nPipeline: {pipeline_str}")
-    
+    # Create the pipeline
     try:
         pipeline = Gst.parse_launch(pipeline_str)
     except Exception as e:
-        print(f"Hata: Pipeline oluşturulurken hata. Gerekli elemanların (x264enc, autovideosrc) kurulu olduğundan emin olun. Hata: {e}")
+        print("ERROR: Pipeline could not be created.")
+        print(f"ERROR_MSG: {e}")
         return
-
-    # Bus ayarları
+    
+    # Bus settings
     bus = pipeline.get_bus()
     bus.add_signal_watch()
     bus.connect("message::error", on_error)
-    # Kamera akışı (canlı) olduğu için EOS gelmesi beklenmez, bu yüzden EOS bağlantısını kaldırabiliriz
+
+    # Sınce the camera feed is live EOS is not needed
     # bus.connect("message::eos", on_eos) 
     
-    print("Kamera akışı başlatılıyor. Pencere açılmayacaktır, akış arka planda gönderiliyor...")
+    print("INFO: Camera feed is starting. Sending the feed on the background.")
     pipeline.set_state(Gst.State.PLAYING)
 
-    # Ana döngü
+    # Main loop
     loop = GLib.MainLoop()
     try:
         loop.run()
     except KeyboardInterrupt:
-        print("\nKullanıcı tarafından durduruldu (Ctrl+C).")
+        print("INFO: Program stopped by user.")
         pass 
-
-    print("Pipeline sonlandırılıyor...")
-    pipeline.set_state(Gst.State.NULL)
-
+    finally:
+        print("INFO: Cleaning up resources")
+        pipeline.set_state(Gst.State.NULL)
+        print("INFO: Stream stopped.")
 
 if __name__ == "__main__":
     run_camera_sender()
-    print("Gönderici sonlandı.")

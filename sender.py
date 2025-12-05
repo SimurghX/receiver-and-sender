@@ -1,13 +1,8 @@
 import gi
 import sys
 
-try:
-    gi.require_version('Gst', '1.0')
-    from gi.repository import Gst, GLib
-except ValueError as e:
-    print("ERROR: GStreamer dependencies missing.")
-    print(f"{e}")
-    sys.exit(1)
+gi.require_version('Gst', '1.0')
+from gi.repository import Gst, GLib
 
 class CameraStreamer: 
     # 127.0.0.1 = Current Device

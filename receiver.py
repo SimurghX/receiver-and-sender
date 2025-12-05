@@ -1,59 +1,32 @@
-#!/usr/bin/env python
-
-# GStreamer'ı Python'da kullanmak için gerekli kütüphaneler
 import gi
-import sys
 
-# GStreamer sürümünü belirtin
-try:
-    gi.require_version('Gst', '1.0')
-    from gi.repository import Gst, GLib
-except ValueError as e:
-    print(f"Hata: GStreamer yüklenemedi. Gerekli kütüphanelerin kurulu olduğundan emin olun. Hata: {e}")
-    sys.exit(1)
+gi.require_version('Gst', '1.0')
+from gi.repository import Gst, GLib
 
-# Sabitler
+# Default variables
 UDP_PORT = 5600
-HOST_IP = "0.0.0.0"  # Tüm arayüzlerden gelen paketleri dinle
+HOST_IP = "0.0.0.0"  # Listen for all packages
 
-def on_error(bus, msg):
-    """Hata mesajlarını işler ve uygulamayı sonlandırır."""
+# Error process
+def on_error(self, bus, msg):
     err, debug_info = msg.parse_error()
-    print(f"Hata Kaynağı: {msg.src.get_name()}")
-    print(f"Hata: {err.message}")
-    print(f"Hata Ayıklama Bilgisi: {debug_info}")
-    # Pipeline'ı durdur ve döngüyü sonlandır
-    global pipeline
-    if pipeline:
-        pipeline.set_state(Gst.State.NULL)
-    GLib.MainLoop().quit()
+    print(f"ERROR: {err.message}")
+    print(f"DEBUG: {debug_info}")
+    global loop
 
-def on_eos(bus, msg):
-    """Akış Sonu (End of Stream) sinyalini işler."""
-    print("Akış Sonu (End of Stream) ulaşıldı.")
-    # Pipeline'ı durdur ve döngüyü sonlandır
-    global pipeline
-    if pipeline:
-        pipeline.set_state(Gst.State.NULL)
-    GLib.MainLoop().quit()
+    if loop:
+        loop.quit()
+
+# End of stream process
+def on_eos(self):
+    print("INFO: Reach EOS (End of Stream).")
+    global loop
+    if loop:
+        loop.quit()
 
 def run_gcs_receiver():
-    """GCS alıcısını başlatır ve GStreamer pipeline'ı oluşturur."""
-    global pipeline
-
-    # 1. GStreamer'ı başlat
+    # Start GStreamer
     Gst.init(None)
-
-    # 2. Pipeline dizgisini (string) oluştur
-    # Drone'dan gelen tipik bir H.264 RTP akışını çözmek için gerekli adımlar:
-    # 1. udpsrc: 5600 portundan UDP paketlerini alır.
-    # 2. caps: Gelen verinin RTP H.264 video olduğunu belirtir.
-    # 3. rtph264depay: RTP paketlerinden H.264 veri birimlerini (NAL'leri) ayırır.
-    # 4. h264parse: H.264 akışını ayrıştırır ve kod çözücü için hazırlar.
-    # 5. avdec_h264: H.264 verisini çözerek RAW video formatına dönüştürür.
-    #    (Sisteminizde donanım hızlandırma varsa 'vaapih264dec' veya 'nvdec' gibi bir element kullanabilirsiniz.)
-    # 6. videoconvert: Çözülmüş videoyu ekrana uygun bir formata dönüştürür.
-    # 7. autovideosink: Video akışını sistemdeki en uygun pencere/görüntüleme elemanına gönderir.
 
     pipeline_str = (
         f"udpsrc port={UDP_PORT} address={HOST_IP} ! "
@@ -67,34 +40,35 @@ def run_gcs_receiver():
 
     print(f"Pipeline: {pipeline_str}")
     
-    # 3. Pipeline'ı oluştur
+    # Create the pipeline
     try:
         pipeline = Gst.parse_launch(pipeline_str)
     except Exception as e:
-        print(f"Pipeline oluşturulurken hata: {e}")
+        print("ERROR: Failed to create pipeline")
+        print(f"{e}")
         return
 
-    # 4. Bus (Otobüs) ayarlarını yap
-    # Bus, GStreamer elemanlarından gelen mesajları (Hata, Akış Sonu, vb.) almak için kullanılır.
+    # Bus settings
     bus = pipeline.get_bus()
     bus.add_signal_watch()
     bus.connect("message::error", on_error)
     bus.connect("message::eos", on_eos)
 
-    # 5. Pipeline'ı başlat
-    print("Video akışı bekleniyor. Pipeline başlatılıyor...")
+    # Start the pipeline
+    print("INFO: Waiting for video stream...")
     pipeline.set_state(Gst.State.PLAYING)
 
-    # 6. Ana döngüyü başlat
-    # Bu, GStreamer'ın olayları (frameler, hatalar vb.) işlemesini sağlar.
+    # Main loop
     loop = GLib.MainLoop()
     try:
-        loop.run()  # <-- Bu satır eksikti, programı hayatta tutan budur.
+        loop.run()
     except KeyboardInterrupt:
-        print("\nKullanıcı tarafından durduruldu.")
-        on_eos(None, None) # Temiz kapanış
-    except Exception as e:
-        print(f"Döngü hatası: {e}")
+        print("INFO: Program stopped by user.")
+        pass
+    finally:
+        print("INFO: Cleaning up resources...")
+        pipeline.set_state(Gst.State.NULL)
+        print("INFO: Stream stopped.")
 
 if __name__ == "__main__":
     run_gcs_receiver()

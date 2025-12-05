@@ -30,12 +30,12 @@ def run_gcs_receiver():
 
     pipeline_str = (
         f"udpsrc port={UDP_PORT} address={HOST_IP} ! "
-        f"application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264, payload=(int)96 ! "
-        f"rtph264depay ! "
-        f"h264parse ! "
-        f"avdec_h264 ! "
-        f"videoconvert ! "
-        f"autovideosink"
+        "application/x-rtp, payload=96 ! "
+        "rtph264depay ! "
+        "h264parse ! "
+        "decodebin ! "
+        "videoconvert ! "
+        "autovideosink sync=false"
     )
 
     print(f"Pipeline: {pipeline_str}")

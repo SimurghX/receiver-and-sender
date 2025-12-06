@@ -34,12 +34,14 @@ class CameraReceiver:
 
     # Receive live camera feed
     def run(self):
+        # Define pipeline structure
         pipeline_str = (
-            f"udpsrc port={UDP_PORT} address={HOST_IP} ! "
-            "application/x-rtp, payload=96 ! "
+            f"udpsrc port={UDP_PORT} address={HOST_IP} buffer-size=524288 ! "
+            "application/x-rtp, media=video, clock-rate=90000, encoding-name=H264, payload=96 ! "
+            "rtpjitterbuffer latency=50 mode=1 ! "
             "rtph264depay ! "
             "h264parse ! "
-            "decodebin ! "
+            "avdec_h264 ! " 
             "videoconvert ! "
             "autovideosink sync=false"
         )

@@ -34,12 +34,13 @@ class CameraStreamer:
     def run(self):
         # Define Pipeline Structure
         pipeline_str = (
-            f"autovideosrc ! "
+            f"v4l2src ! "
+            f"video/x-raw, width=640, height=480, framerate=30/1 ! "
             f"videoconvert ! "
-            f"x264enc tune=zerolatency bitrate=1000 speed-preset=ultrafast ! "
+            f"x264enc tune=zerolatency bitrate=2500 speed-preset=ultrafast key-int-max=30 ! "
             f"rtph264pay config-interval=1 pt=96 ! "
-            f"udpsink host={self.ip} port={self.port}"
-        )   
+            f"udpsink host={self.ip} port={self.port} sync=false"
+        )
 
         print(f"INFO: Sending to {self.ip}:{self.port}")
         print(f"\nPipeline: {pipeline_str}")
